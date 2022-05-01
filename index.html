@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Doorbell IoT</title>
+</head>
+<body>
+    <main>
+        <p style="text-align: center; margin: 0;">Status: </p>
+        <h1>
+            Not Subscribed
+        </h1>
+        <p>
+            Enable notifications to subscribe to the push notification service.
+        </p>
+        <ol>
+            <li>
+                Click the <span>Notifications blocked</span> button.
+                <div class="image1"></div>
+            </li>
+            <li>
+                Click the <span>Allow for this site</span> button.
+                <div class="image2"></div>
+            </li>
+        </ol>
+    </main>
+    <script>
+    const config = {
+      publicKey:
+        "BE4ghRE1gRNM9aZwaeZMDout7ReaP2JNr3Ho2z2f7OwbwKm9nrDTVr4AYn5mfjWh4WSKW_GnTvHDs1pdS8C_apE",
+      url:
+        "https://vdjavr1c59.execute-api.eu-central-1.amazonaws.com/default/confirmSubscribe",
+    };
+    function updateUi() {
+        const element = document.getElementsByTagName("h1")[0]
+        element.setAttribute('subscribed',true)
+        element.innerHTML = 'Subscribed'
+    }
+    async function subscribe(topic) {
+      if (Notification.permission !== "granted") {
+        swReg = await navigator.serviceWorker.register("./sw.js");
+        const subscription = await swReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(config.publicKey),
+        });
+      
+        fetch(config.url, {
+          method: "POST",
+          body: JSON.stringify(
+              {
+                  topic: topic, subscription: JSON.stringify(subscription)
+              }
+          )
+        });
+        updateUi()
+      } else {
+        updateUi()
+      }
+    }
+    function urlB64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding)
+        .replace(/\-/g, "+")
+        .replace(/_/g, "/");
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+    
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+    subscribe("doorbell");
+    </script>
+</body>
+<style>
+html {
+    --bg: #1a1a1a;
+    --attention: #438dee;
+    --secondary: #828282;
+    --green: #71ea71;
+    --red: #ff5c5c;
+    --img1: url('https://i.imgur.com/3OlSPLs.jpg');
+    --img2: url('https://i.imgur.com/BooCEn2.jpg');
+    background-color: var(--bg);
+    color: #fff;
+    font-family: sans-serif;
+    font-size: x-large;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+svg {
+    position: absolute;
+    left: 10%;
+    top: 0%;
+}
+
+h1 {
+    font-size: 2em;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    color: var(--red)
+}
+
+h1[subscribed] {
+    color: var(--green);
+}
+
+main {
+    margin: 50px;
+}
+
+span {
+    font-weight: bold;
+    color: var(--attention);
+}
+
+li::marker {
+    color: var(--secondary);
+}
+
+.image1 {
+    display: block;
+    width: 500px;
+    height: 50px;
+    background: linear-gradient(to right, var(--bg), transparent 30%, transparent 70%, var(--bg)), var(--img1);
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+}
+
+.image2 {
+    display: block;
+    width: 500px;
+    height: 300px;
+    background: linear-gradient(to right, var(--bg), transparent 20%, transparent 80%, var(--bg)), var(--img2);
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+}
+@media only screen and (hover: none) and (pointer: coarse){
+    .image1 {
+        width: 70vw; 
+        height: 10vw;
+    }
+    .image2 {
+        width: 650px;
+    }
+    html {
+        --img1: url('https://i.imgur.com/P7w4MHB.jpg');
+        --img2: url('https://i.imgur.com/aCCBG7J.jpg');
+    }
+}
+</style>
+</html>
