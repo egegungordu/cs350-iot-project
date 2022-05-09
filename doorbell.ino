@@ -6,16 +6,15 @@
 #include <WiFiClientSecureBearSSL.h>
 
 #define SAMPLES 128             //Must be a power of 2
-#define SAMPLING_FREQUENCY 1800 //Hz, must be less than 10000 due to ADC
+#define SAMPLING_FREQUENCY 4000 //Hz, must be less than 10000 due to ADC
 #define WAIT_TIME 2000
-#define CONFIRM_TIME 15000
 #define BUFFER_SIZE 64 // Max 255
 #define BUTTON D1
 #define LED D6
 #define COOLDOWN 3000
+#define DETECT_THRESHOLD 0.6
 
 #define RECORD_LED_BLINK 0
-#define CONFIRM_LED_BLINK 400
 
 const char* ssid = "gungordu";
 const char* password = "31033103";
@@ -32,14 +31,13 @@ double vReal[SAMPLES];
 double vImag[SAMPLES];
 
 int lastPeak;
-int lowestErrorCount;
 int recorded[BUFFER_SIZE];
 int last[BUFFER_SIZE];
+double recordedSampleCount;
 
 enum state {
   WAITING,
   RECORDING,
-  CONFIRMING,
   LISTENING,
   SLEEPING
 };
@@ -88,13 +86,14 @@ void setup(void){
   
   timestamp = millis();
   sampling_period_us = round(1000000*(1.0/SAMPLING_FREQUENCY));
-  lowestErrorCount = (EEPROM.read(0) << 8) + EEPROM.read(1);
-  Serial.println("Lowest error count: ");
-  Serial.println(lowestErrorCount);
   readIntArrayFromEEPROM(2, recorded, BUFFER_SIZE); 
   Serial.println("Recorded array: ");
+  recordedSampleCount = 0;
   for(int i = 0; i < BUFFER_SIZE; i++) {
     Serial.println(recorded[i]);
+    if(recorded[i] != 0){
+      recordedSampleCount++;
+    }
   }
 }
 
@@ -160,44 +159,25 @@ void notify() {
 
 void doRecord() {
   if(digitalRead(BUTTON)) {
-    currentState = CONFIRMING;
+    currentState = LISTENING;
     timestamp = millis();
-    lowestErrorCount = 10000;
     writeIntArrayIntoEEPROM(2, recorded, 64);
     return;
   }
+  recordedSampleCount = 0;
   int peak = calculatePeak();
   for(int i=0; i<BUFFER_SIZE-1; i++){
     recorded[i] = recorded[i+1];
+    if(recorded[i] != 0) {
+      recordedSampleCount++;
+    }
+  }
+  if(peak != 0) {
+    recordedSampleCount++;
   }
   recorded[BUFFER_SIZE-1] = peak;
   Serial.println(recorded[BUFFER_SIZE-1]);
   ledBlink(RECORD_LED_BLINK);
-}
-
-void doConfirm() {
-  if (millis() - timestamp > CONFIRM_TIME) {
-    currentState = LISTENING;
-    EEPROM.write(0, lowestErrorCount >> 8);
-    EEPROM.write(1, lowestErrorCount & 0xFF);
-    EEPROM.commit();
-    Serial.println(lowestErrorCount);
-    return;
-  }
-  int peak = calculatePeak();
-  int errorCount = 0;
-  for(int i=0; i<BUFFER_SIZE-1; i++){
-    if(recorded[i] != 0 && abs(last[i] - recorded[i]) > 4) {
-      errorCount++;
-    }
-    last[i] = last[i+1];
-  }
-  last[BUFFER_SIZE-1] = peak;
-  if(lowestErrorCount > errorCount) {
-    lowestErrorCount = errorCount;
-  }
-  Serial.println(lowestErrorCount);
-  ledBlink(CONFIRM_LED_BLINK);
 }
 
 void doListen() {
@@ -209,8 +189,7 @@ void doListen() {
     return;
   }
   int peak = calculatePeak();
-  //Serial.println(peak);
-  int errorCount = 0;
+  double errorCount = 0;
   for(int i=0; i<BUFFER_SIZE-1; i++){
     if(recorded[i] != 0 && abs(last[i] - recorded[i]) > 6) {
       errorCount++;
@@ -218,8 +197,8 @@ void doListen() {
     last[i] = last[i+1];
   }
   last[BUFFER_SIZE-1] = peak;
-  Serial.println(errorCount);
-  if(errorCount < lowestErrorCount + 3) {
+  Serial.println(1 - errorCount/recordedSampleCount);
+  if(1-errorCount/recordedSampleCount > DETECT_THRESHOLD) {
     currentState = SLEEPING;
     for(int i=0; i<BUFFER_SIZE; i++){
       last[i] = 0;
@@ -275,9 +254,6 @@ void loop(void){
       break;
     case RECORDING:
       doRecord();
-      break;
-    case CONFIRMING:
-      doConfirm();
       break;
     case LISTENING:
       doListen();
